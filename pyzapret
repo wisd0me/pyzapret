@@ -6,20 +6,24 @@ import argparse
 def process(args):
     '''
     File format is follow:
-    2016-03-18;http://24-dd.biz/;24-dd.biz;104.27.157.27,104.27.156.27
-    2016-03-17;;litmir.co;104.24.117.214,107.154.114.57,104.24.116.214
-    2016-02-16;;;148.251.140.113,148.251.140.114,148.251.140.123,148.251.140.112
+
+    Updated: 2017-10-01 10:00:00 +0000
+    1.179.201.18;;;суд;2-946/13;2013-06-10
+    103.246.200.0/22;;;Роскомнадзор;9-Restricting;2017-04-28
+    104.16.10.218;;;суд;2-946/13;2013-06-10
+    104.16.102.41;;;суд;2-1687/2013;2013-05-23
+    104.18.51.216 | 104.24.106.26 | 104.24.107.26 | 104.28.10.247 | 104.28.11.247;;;суд;2-946/13;2013-06-10
+    104.24.126.90 | 104.24.127.90;aekino.ru;http://aekino.ru/filmy/berlinskii-sindrom-onlain-161514 | http://aekino.ru/filmy/smotret-berlinskii-sindrom-besplatno-161514;Мосгорсуд;определение о предварительном обеспечении по заявлению № 2И-0745/2017;2017-07-07
+    144.76.166.114;ads.prodom.ru;http://ads.prodom.ru/sell/materials/tools/74184.html;МВД;8/7/10-1447;2017-03-07
+
     and so on.
     '''
-    def expand_ips(addrs):
-        ''' Expands records blocked by IP into ip addr per line '''
+    def expand_tokens(addrs):
+        ''' Expands multiple blocked targets in one token into one per line '''
         str=''
-        ips = addrs.split(',')
-        while len(ips) > 1:
-            str += ips.pop(0) + '\n'
-        else:
-            # since it's the last field in the original list, we don't need to add '\n'
-            str += ips.pop(0)
+        items = addrs.split(' | ')
+        while items:
+            str += items.pop(0) + '\n'
         return str
 
     with open(args.input, mode='r', encoding=args.encoding, errors='replace') as input, \
@@ -28,39 +32,49 @@ def process(args):
         prev = ''
         for line in input:
             tokens = line.split(';')
+            if len(tokens) < 2:
+                continue
+
             outfile = urls
             is_domain = False
-            i = 1
-            if not tokens[1]:
+            i = 2
+            if not tokens[2]:
+                if '/' in tokens[2]:
+                    continue # no idea what to do with subnet records :\
                 outfile = domains
                 is_domain = True
-                i = 2
-            if tokens[i] == prev:
+                i = 1
+            if tokens[i] and tokens[i] == prev:
                 continue
             prev = tokens[i]
 
-            record = expand_ips(tokens[3]) if is_domain and not tokens[i] \
-                     else tokens[i] + '\n'
+            record = tokens[0] if is_domain and not tokens[i] \
+                     else tokens[i]
+            if '|' in record:
+                record = expand_tokens(record)
+            else:
+                record += '\n'
             outfile.write(record)
 
-argp = argparse.ArgumentParser(description='converts antizapret.info csv file \
-                               into url & domain lists')
-argp.add_argument('-i', '--input', dest='input', required=True, help='input file')
-argp.add_argument('-u', '--urls', dest='urls',
-                  help='url list output file, ".urls" suffix is added by default \
-                  to the input file name')
-argp.add_argument('-d', '--domains', dest='domains',
-                  help='domain list output file, ".domains" suffix is added by default \
-                  to the input file name')
-argp.add_argument('-e', '--encoding', dest='encoding', default='utf8',
-                  help='file encoding; by default, utf8 is used')
+def main():
+    argp = argparse.ArgumentParser(description='converts antizapret.info csv file \
+                                   into url & domain lists')
+    argp.add_argument('-i', '--input', dest='input', required=True, help='input file')
+    argp.add_argument('-u', '--urls', dest='urls',
+                      help='url list output file, ".urls" suffix is added by default \
+                      to the input file name')
+    argp.add_argument('-d', '--domains', dest='domains',
+                      help='domain list output file, ".domains" suffix is added by default \
+                      to the input file name')
+    argp.add_argument('-e', '--encoding', dest='encoding', default='utf8',
+                      help='file encoding; by default, utf8 is used')
 
-args = argp.parse_args()
+    args = argp.parse_args()
+    if not args.urls:
+        args.urls = args.input + '.urls'
+    if not args.domains:
+        args.domains = args.input + '.domains'
+    process(args)
 
-if not args.urls:
-    args.urls = args.input + '.urls'
-
-if not args.domains:
-    args.domains = args.input + '.domains'
-
-process(args)
+if __name__ == '__main__':
+    main()
